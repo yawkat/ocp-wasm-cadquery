@@ -21,8 +21,13 @@ pyodide xbuildenv install "$PYODIDE_XBUILDENV_VERSION"
 
 emscripten_version=$(pyodide config get emscripten_version)
 echo "Emscripten version: $emscripten_version"
+# emsdk tags match emscripten versions; pin it so the build doesn't depend on
+# whatever emsdk master looks like today
 if [ ! -d emsdk ]; then
-  git clone --depth 1 https://github.com/emscripten-core/emsdk emsdk
+  git clone --depth 1 --branch "$emscripten_version" https://github.com/emscripten-core/emsdk emsdk
+elif [ "$(git -C emsdk describe --tags --exact-match 2>/dev/null)" != "$emscripten_version" ]; then
+  git -C emsdk fetch --depth 1 origin tag "$emscripten_version"
+  git -C emsdk checkout --detach "$emscripten_version"
 fi
 (cd emsdk && ./emsdk install "$emscripten_version" && ./emsdk activate "$emscripten_version")
 if [ -n "${GITHUB_OUTPUT:-}" ]; then

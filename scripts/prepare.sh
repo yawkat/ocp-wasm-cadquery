@@ -21,6 +21,13 @@ pkg="$upstream/cadquery-ocp-novtk"
 # ----- Upstream checkout -----
 if [ ! -d "$upstream/.git" ]; then
   git clone --filter=blob:none https://github.com/yeicor/OCP.wasm "$upstream"
+fi
+if [ "$(git -C "$upstream" rev-parse HEAD)" != "$OCP_WASM_COMMIT" ]; then
+  # Move an existing checkout to the pinned commit. Only drop our own changes;
+  # untracked files (emsdk, xbuildenv, build dirs) stay.
+  git -C "$upstream" checkout -- cadquery-ocp-novtk/patch_OCP.cmake
+  git -C "$upstream" cat-file -e "$OCP_WASM_COMMIT^{commit}" 2>/dev/null ||
+    git -C "$upstream" fetch origin "$OCP_WASM_COMMIT"
   git -C "$upstream" checkout --detach "$OCP_WASM_COMMIT"
 fi
 head=$(git -C "$upstream" rev-parse HEAD)
@@ -60,7 +67,8 @@ fi
 if [ ! -d "$work/cadquery-$CADQUERY_VERSION" ]; then
   rm -rf "$work/cq-tmp" && mkdir "$work/cq-tmp"
   # Find the wheel and its sha256 through PyPI's JSON API
-  read -r wheel_url wheel_sha256 < <(
+  # (assigned first so that a failure stops the script)
+  wheel_info=$(
     curl -fsSL "https://pypi.org/pypi/cadquery/$CADQUERY_VERSION/json" | python3 -I -c '
 import json, sys
 for f in json.load(sys.stdin)["urls"]:
@@ -70,6 +78,7 @@ for f in json.load(sys.stdin)["urls"]:
 else:
     sys.exit("no CadQuery wheel on PyPI")
 ')
+  read -r wheel_url wheel_sha256 <<< "$wheel_info"
   curl -fsSL -o "$work/cq-tmp/cadquery.whl" "$wheel_url"
   echo "$wheel_sha256  $work/cq-tmp/cadquery.whl" | sha256sum -c --quiet
   unzip -q "$work/cq-tmp/cadquery.whl" -d "$work/cq-tmp/wheel"

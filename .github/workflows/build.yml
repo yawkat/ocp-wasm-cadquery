@@ -2,12 +2,21 @@ name: build
 
 on:
   push:
+    # Builds on main also fill the default branch's caches, which are the only
+    # ones that tag and PR builds can restore.
+    branches: [main]
     tags: ["*"]
+    paths-ignore: ["**.md", "LICENSE"] # not applied to tag pushes
   pull_request:
+    paths-ignore: ["**.md", "LICENSE"]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -82,9 +91,10 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           files=(dist/*.whl dist/*.sha256 dist/keep_modules.txt)
+          notes="SHA-256: \`$(cut -d' ' -f1 dist/*.sha256)\`"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${files[@]}" --clobber
+            gh release edit "$TAG" --notes "$notes"
           else
-            gh release create "$TAG" "${files[@]}" --title "$TAG" --verify-tag \
-              --notes "SHA-256: \`$(cut -d' ' -f1 dist/*.sha256)\`"
+            gh release create "$TAG" "${files[@]}" --title "$TAG" --verify-tag --notes "$notes"
           fi

@@ -21,9 +21,10 @@ if [ ! -s "$keep_list" ]; then
 fi
 
 # Upstream resets the mtimes of the patched OCP sources, so ninja does not
-# notice a changed keep list and silently reuses the old registration code.
-# Throw away the patched sources and OCP.cpp's object when the list changed.
-keep_hash=$(sha256sum "$keep_list" | cut -d' ' -f1)
+# notice a changed keep list (or patch) and silently reuses the old
+# registration code. Throw away the patched sources and OCP.cpp's object when
+# any of them changed.
+keep_hash=$(cat "$keep_list" drop_modules.py patch_OCP.cmake | sha256sum | cut -d' ' -f1)
 for dir in build/*-Release; do
   [ -d "$dir/_deps" ] || continue
   if [ "$(cat "$dir/.keep_modules.sha256" 2>/dev/null)" != "$keep_hash" ]; then
@@ -45,13 +46,20 @@ export CCACHE_COMPILERCHECK=content
 
 if command -v ccache >/dev/null; then ccache --show-stats --zero-stats || true; fi
 rm -rf dist
+mkdir -p build
+build_marker=build/.build-started
+touch "$build_marker"
 start=$(date +%s)
 pyodide build --exports=pyinit
 echo "Build finished in $(( $(date +%s) - start ))s"
 if command -v ccache >/dev/null; then ccache --show-stats || true; fi
+# Stamp only the build directory this run used: the one it installed from
 for dir in build/*-Release; do
-  [ -d "$dir/_deps" ] && echo "$keep_hash" > "$dir/.keep_modules.sha256"
+  if [ "$dir/install_manifest.txt" -nt "$build_marker" ]; then
+    echo "$keep_hash" > "$dir/.keep_modules.sha256"
+  fi
 done
+rm -f "$build_marker"
 
 whl=(dist/*.whl)
 if [ ${#whl[@]} -ne 1 ]; then

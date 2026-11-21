@@ -152,9 +152,9 @@ Notes:
 
 * **Changing the keep list on an existing build directory.** Upstream resets
   the patched OCP sources' mtimes, so ninja would silently reuse the old
-  registration code. `scripts/build.sh` records the list's hash in the build
-  directory and deletes `_deps/OCP-src`, `_deps/OCP.stamp` and `OCP.cpp.o`
-  when it changes. CI always starts from a clean build directory.
+  registration code. `scripts/build.sh` records a hash of the list and our
+  patch files in the build directory and deletes `_deps/OCP-src`,
+  `_deps/OCP.stamp` and `OCP.cpp.o` when it changes. CI always starts from a clean build directory.
 * **NixOS.** The emsdk and pyodide binaries need an FHS environment, e.g.
   `nix-shell -p steam-run binaryen --run "steam-run scripts/build.sh"` (and
   the same for `setup_toolchain.sh`). Set `TMPDIR` to a directory inside the
