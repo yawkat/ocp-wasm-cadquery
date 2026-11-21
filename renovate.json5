@@ -1,0 +1,35 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended"],
+  customManagers: [
+    {
+      // `# renovate: datasource=... depName=...` comments in versions.env
+      customType: "regex",
+      managerFilePatterns: ["/^versions\\.env$/"],
+      matchStrings: [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: packageName=(?<packageName>\\S+))?(?: currentValue=(?<currentValue>\\S+))?\\n[A-Z_]+=(?<currentDigest>[0-9a-f]{40})\\n",
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+=(?<currentValue>\\S+)\\n",
+      ],
+      versioningTemplate: "loose",
+    },
+  ],
+  packageRules: [
+    {
+      // A new upstream commit can move to OCP 8 (which CadQuery 2.8 cannot
+      // use) or change OCP_VERSION, so only propose it on request.
+      matchDepNames: ["yeicor/OCP.wasm"],
+      dependencyDashboardApproval: true,
+    },
+    {
+      // The xbuildenv decides the wheel's ABI, which has to match the Pyodide
+      // runtime of the app that loads the wheel, and the CPython version in
+      // PYTHON_VERSION.
+      matchDepNames: ["pyodide/pyodide"],
+      dependencyDashboardApproval: true,
+    },
+    {
+      matchDepNames: ["WebAssembly/binaryen"],
+      extractVersion: "^version_(?<version>\\d+)$",
+    },
+  ],
+}

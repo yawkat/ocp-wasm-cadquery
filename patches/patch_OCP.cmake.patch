@@ -1,0 +1,21 @@
+diff --git a/cadquery-ocp-novtk/patch_OCP.cmake b/cadquery-ocp-novtk/patch_OCP.cmake
+--- a/cadquery-ocp-novtk/patch_OCP.cmake
++++ b/cadquery-ocp-novtk/patch_OCP.cmake
+@@ -35,6 +35,17 @@ foreach(f IN LISTS vtk_and_opengl_sources)
+   file(REMOVE "${f}")
+ endforeach()
+ 
++# ----- Keep only selected submodules (optional) -----
++if(DEFINED ENV{OCP_KEEP_MODULES})
++  execute_process(
++    COMMAND python3 "${CMAKE_CURRENT_LIST_DIR}/drop_modules.py" "${REAL_SOURCE_DIR}" "$ENV{OCP_KEEP_MODULES}"
++    RESULT_VARIABLE drop_result
++  )
++  if(NOT drop_result EQUAL 0)
++    message(FATAL_ERROR "drop_modules.py failed")
++  endif()
++endif()
++
+ # ----- Modify OCP.cpp -----
+ set(ocp_cpp "${REAL_SOURCE_DIR}/OCP.cpp")
+ file(READ "${ocp_cpp}" content)

@@ -1,0 +1,90 @@
+name: build
+
+on:
+  push:
+    tags: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Load pinned versions
+        run: grep -E '^[A-Z_]+=' versions.env >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: yeicor/OCP.wasm
+          ref: ${{ env.OCP_WASM_COMMIT }}
+          path: upstream
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Apply patches and compute keep list
+        run: scripts/prepare.sh upstream
+
+      - name: Install wasm-opt
+        run: |
+          curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_$BINARYEN_VERSION/binaryen-version_$BINARYEN_VERSION-x86_64-linux.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/binaryen-version_$BINARYEN_VERSION/bin" >> "$GITHUB_PATH"
+
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ccache-${{ env.OCP_WASM_COMMIT }}-${{ env.PYODIDE_XBUILDENV_VERSION }}
+          max-size: 3G
+
+      - id: toolchain
+        name: Install pyodide-build, xbuildenv and emscripten
+        run: scripts/setup_toolchain.sh upstream
+
+      - uses: actions/cache@v6
+        with:
+          path: upstream/cadquery-ocp-novtk/emsdk/upstream/emscripten/cache
+          key: emscripten-cache-${{ steps.toolchain.outputs.emscripten_version }}-${{ env.OCP_WASM_COMMIT }}
+          restore-keys: emscripten-cache-${{ steps.toolchain.outputs.emscripten_version }}-
+
+      - name: Build
+        run: scripts/build.sh upstream
+        timeout-minutes: 310
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel
+          path: upstream/cadquery-ocp-novtk/dist/
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: wheel
+          path: dist
+
+      - name: Upload to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          files=(dist/*.whl dist/*.sha256 dist/keep_modules.txt)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber
+          else
+            gh release create "$TAG" "${files[@]}" --title "$TAG" --verify-tag \
+              --notes "SHA-256: \`$(cut -d' ' -f1 dist/*.sha256)\`"
+          fi
