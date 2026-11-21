@@ -14,7 +14,7 @@ source "$root/versions.env"
 upstream=$(realpath -m "${1:-$root/upstream}")
 cd "$upstream/cadquery-ocp-novtk"
 
-python -m pip install -r ../requirements.txt change-wheel-version
+python -m pip install -r ../requirements.txt change-wheel-version==0.6.0
 # shellcheck disable=SC2046 # one argument per requirement
 python -m pip install $(python -c 'import tomllib; cfg = tomllib.load(open("pyproject.toml", "rb")); print(*cfg["build-system"]["requires"])')
 pyodide xbuildenv install "$PYODIDE_XBUILDENV_VERSION"

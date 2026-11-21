@@ -66,7 +66,9 @@ if [ ${#whl[@]} -ne 1 ]; then
   echo "error: expected exactly one wheel in dist/, found ${#whl[@]}" >&2
   exit 1
 fi
-change_wheel_version "${whl[0]}" --version "$OCP_VERSION+cadquery$CADQUERY_VERSION" --delete-old-wheel
+# (--version rejects local versions; the base version is upstream's OCP
+# version, which prepare.sh checked against OCP_VERSION)
+change_wheel_version "${whl[0]}" --local-version "cadquery$CADQUERY_VERSION" --delete-old-wheel
 whl=(dist/*.whl)
 cp "$keep_list" dist/keep_modules.txt
 (cd dist && sha256sum "$(basename "${whl[0]}")" > "$(basename "${whl[0]}").sha256")
