@@ -1,7 +1,7 @@
 diff --git a/cadquery-ocp-novtk/patch_OCP.cmake b/cadquery-ocp-novtk/patch_OCP.cmake
 --- a/cadquery-ocp-novtk/patch_OCP.cmake
 +++ b/cadquery-ocp-novtk/patch_OCP.cmake
-@@ -35,6 +35,26 @@ foreach(f IN LISTS vtk_and_opengl_sources)
+@@ -35,6 +35,35 @@ foreach(f IN LISTS vtk_and_opengl_sources)
    file(REMOVE "${f}")
  endforeach()
  
@@ -23,6 +23,15 @@ diff --git a/cadquery-ocp-novtk/patch_OCP.cmake b/cadquery-ocp-novtk/patch_OCP.c
 +  if(NOT drop_result EQUAL 0)
 +    message(FATAL_ERROR "drop_modules.py failed")
 +  endif()
++endif()
++
++# ----- Bind the methods of classes on first use -----
++execute_process(
++  COMMAND python3 "${CMAKE_CURRENT_LIST_DIR}/lazy_classes.py" "${REAL_SOURCE_DIR}"
++  RESULT_VARIABLE lazy_result
++)
++if(NOT lazy_result EQUAL 0)
++  message(FATAL_ERROR "lazy_classes.py failed")
 +endif()
 +
  # ----- Modify OCP.cpp -----
