@@ -23,31 +23,28 @@ fi
 # Compiler flags. pyodide's compiler wrapper appends CFLAGS and CXXFLAGS to
 # every compile command, after the flags from CMake, so they win over any
 # per-target flags.
-#  * -O3 for OpenCascade: geometry kernel speed matters.
+#  * -O3: geometry kernel speed matters. (-Os for the binding sources
+#    shrank the code by only about 1% but added 20% more try blocks, which
+#    make every C++ exception slower in Firefox.)
 #  * Hidden visibility: OpenCascade's Standard_EXPORT is empty outside
 #    Windows, so without it every OpenCascade symbol is exported from the
 #    module and every address-taken one goes through a GOT import that the
 #    JS dynamic linker resolves at load time. Only PyInit_OCP (explicitly
 #    marked visible by pybind11) has to be exported. References to undefined
 #    symbols, such as libc++ in the main module, are not affected.
-#  * OCP_BINDINGS_OPT_FLAG: optimization level of the binding sources only
-#    (see patch_OCP.cmake.patch). Binding dispatch speed doesn't matter, and
-#    -O3 inlines pybind11's templates into huge register_* functions that the
-#    browser compiles on import. -Os is what pybind11 uses for its modules.
 export CFLAGS="-O3 -fvisibility=hidden"
 export CXXFLAGS="-O3 -fvisibility=hidden -fvisibility-inlines-hidden"
 export LDFLAGS=-O1
-export OCP_BINDINGS_OPT_FLAG=-Os
 
 # Upstream resets the mtimes of the patched OCP sources, so ninja does not
 # notice a changed keep list (or patch) and silently reuses the old
 # registration code. Throw away the patched sources and OCP.cpp's object when
 # any of them changed.
-keep_hash=$({ cat "$keep_list" drop_modules.py fix_iterators.py patch_OCP.cmake; echo "$OCP_BINDINGS_OPT_FLAG"; } | sha256sum | cut -d' ' -f1)
+keep_hash=$(cat "$keep_list" drop_modules.py fix_iterators.py patch_OCP.cmake | sha256sum | cut -d' ' -f1)
 # CFLAGS/CXXFLAGS never reach CMake: pyodide's compiler wrapper appends them,
 # out of sight of ninja and ccache. Delete all objects when they changed, so
 # that ninja recompiles everything.
-flags_stamp="CFLAGS=$CFLAGS CXXFLAGS=$CXXFLAGS OCP_BINDINGS_OPT_FLAG=$OCP_BINDINGS_OPT_FLAG"
+flags_stamp="CFLAGS=$CFLAGS CXXFLAGS=$CXXFLAGS"
 for dir in build/*-Release; do
   [ -d "$dir/_deps" ] || continue
   if [ "$(cat "$dir/.keep_modules.sha256" 2>/dev/null)" != "$keep_hash" ]; then
@@ -71,9 +68,8 @@ export CI=1 _FORCE_OLD_SOURCES=TRUE OCP_KEEP_MODULES="$keep_list"
 # The compiler is downloaded again on every CI run, so don't compare mtimes
 export CCACHE_COMPILERCHECK=content
 # ccache only sees the command line from CMake, not the CFLAGS/CXXFLAGS that
-# pyodide's compiler wrapper appends behind it, so add them to the hash.
-# (OCP_BINDINGS_OPT_FLAG is on the OCP target's command line.)
-export CCACHE_NAMESPACE="CFLAGS=$CFLAGS CXXFLAGS=$CXXFLAGS"
+# pyodide's compiler wrapper appends behind it, so add them to the hash
+export CCACHE_NAMESPACE="$flags_stamp"
 
 if command -v ccache >/dev/null; then ccache --show-stats --zero-stats || true; fi
 rm -rf dist

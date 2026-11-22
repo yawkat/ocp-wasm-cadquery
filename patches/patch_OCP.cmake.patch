@@ -1,5 +1,4 @@
 diff --git a/cadquery-ocp-novtk/patch_OCP.cmake b/cadquery-ocp-novtk/patch_OCP.cmake
-index 4edc785..cb6c710 100644
 --- a/cadquery-ocp-novtk/patch_OCP.cmake
 +++ b/cadquery-ocp-novtk/patch_OCP.cmake
 @@ -35,6 +35,26 @@ foreach(f IN LISTS vtk_and_opengl_sources)
@@ -29,45 +28,3 @@ index 4edc785..cb6c710 100644
  # ----- Modify OCP.cpp -----
  set(ocp_cpp "${REAL_SOURCE_DIR}/OCP.cpp")
  file(READ "${ocp_cpp}" content)
-@@ -70,6 +81,41 @@ string(REGEX REPLACE "SET\\(PYTHON_SP_DIR \\\"site-packages\\\"" "SET(PYTHON_SP_
- if(NOT content MATCHES ".*SKBUILD_SOABI.*")
-   string(APPEND content "\nset_property(TARGET OCP PROPERTY SUFFIX \".\${SKBUILD_SOABI}\${CMAKE_SHARED_MODULE_SUFFIX}\")")
- endif()
-+# ----- Optimization level of the bindings (optional) -----
-+# Compile the binding sources with OCP_BINDINGS_OPT_FLAG (e.g. -Os) and leave
-+# OpenCascade at the global level. pyodide's compiler wrapper appends
-+# CFLAGS/CXXFLAGS after all flags from CMake, so a target compile option alone
-+# would lose against them. emcc appends EMCC_CFLAGS after its whole command
-+# line, so the OCP target's compiler launcher sets that. The compile option is
-+# added as well so that ccache, which doesn't hash EMCC_CFLAGS, sees a
-+# different command line.
-+if(DEFINED ENV{OCP_BINDINGS_OPT_FLAG})
-+  set(opt_flag "$ENV{OCP_BINDINGS_OPT_FLAG}")
-+  if(NOT opt_flag MATCHES "^-O[0-3sz]$")
-+    message(FATAL_ERROR "OCP_BINDINGS_OPT_FLAG must be one of -O0..-O3, -Os, -Oz, got '${opt_flag}'")
-+  endif()
-+  # Compiled into OCP: fails the build if a size flag doesn't reach the
-+  # compiler. Only written when it changes, to not rebuild OCP every time.
-+  set(check_cpp "${REAL_BINARY_DIR}/ocp_opt_flag_check.cpp")
-+  set(check_src "// OCP_BINDINGS_OPT_FLAG=${opt_flag}\n")
-+  if(opt_flag MATCHES "^-O[sz]$")
-+    string(APPEND check_src "#ifndef __OPTIMIZE_SIZE__\n#error \"OCP sources are not compiled with ${opt_flag}\"\n#endif\n")
-+  endif()
-+  set(check_old "")
-+  if(EXISTS "${check_cpp}")
-+    file(READ "${check_cpp}" check_old)
-+  endif()
-+  if(NOT check_old STREQUAL check_src)
-+    file(WRITE "${check_cpp}" "${check_src}")
-+  endif()
-+  if(NOT content MATCHES "EMCC_CFLAGS")
-+    string(APPEND content "
-+target_compile_options(OCP PRIVATE ${opt_flag})
-+set_property(TARGET OCP PROPERTY CXX_COMPILER_LAUNCHER \"\${CMAKE_COMMAND}\" -E env EMCC_CFLAGS=${opt_flag} \${CMAKE_CXX_COMPILER_LAUNCHER})
-+target_sources(OCP PRIVATE \"${check_cpp}\")
-+")
-+  endif()
-+endif()
- if(NOT content STREQUAL content_old)
-   file(WRITE "${OCP_CMAKE}" "${content}")
-   message(STATUS "Patched CMakeLists.txt")

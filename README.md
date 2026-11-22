@@ -115,29 +115,18 @@ Limits:
 If something is missing, add its module to the start set (or extend the
 script) and rebuild.
 
-### Build flags
+### Symbol visibility
 
-On top of dropping modules, the build changes how the module is compiled
-(see the comments in [`scripts/build.sh`](scripts/build.sh)):
-
-* **The bindings are compiled with `-Os`, OpenCascade with `-O3`.** At `-O3`
-  clang inlines pybind11's templates into a few huge `register_X`
-  functions, which run once at import but which the browser still has to
-  compile. Binding dispatch speed hardly matters next to the Python
-  interpreter, while OpenCascade's geometry code stays fully optimized.
-  pyodide's compiler wrapper appends `CFLAGS`/`CXXFLAGS` after all flags
-  from CMake, so [`patch_OCP.cmake.patch`](patches/patch_OCP.cmake.patch)
-  passes the bindings' level through `EMCC_CFLAGS`, which emcc appends last,
-  and compiles a check into the module that fails the build if the flag
-  doesn't arrive.
-* **Hidden symbol visibility for everything.** OpenCascade's
-  `Standard_EXPORT` is empty outside Windows, so by default every
-  OpenCascade symbol is exported from the side module and every
-  address-taken one is imported again through the GOT, which Emscripten's
-  JS dynamic linker resolves when the module loads. The module only needs
-  to export `PyInit_OCP`. C++ exceptions and RTTI keep working: OpenCascade
-  and OCP are linked into the same module, and references to symbols of the
-  main module (libc++, libc++abi) are not affected by `-fvisibility`.
+Everything is compiled with `-fvisibility=hidden` (see
+[`scripts/build.sh`](scripts/build.sh)). OpenCascade's `Standard_EXPORT` is
+empty outside Windows, so otherwise every OpenCascade symbol is exported from
+the side module and every address-taken one is imported again through the
+GOT, which Emscripten's JS dynamic linker resolves when the module loads. With
+hidden visibility the module exports about 850 symbols instead of 45,000
+(`PyInit_OCP` and pybind11's exception types) and imports about 1,400 instead
+of 46,000. C++ exceptions and RTTI keep working: OpenCascade and OCP are
+linked into the same module, and references to symbols of the main module
+(libc++, libc++abi) are not affected by `-fvisibility`.
 
 ## Using it from web-openscad-editor
 
