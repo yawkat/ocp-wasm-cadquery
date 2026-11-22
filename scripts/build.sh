@@ -70,6 +70,9 @@ export SKBUILD_CMAKE_BUILD_TYPE=Release
 export CI=1 _FORCE_OLD_SOURCES=TRUE OCP_KEEP_MODULES="$keep_list"
 # The compiler is downloaded again on every CI run, so don't compare mtimes
 export CCACHE_COMPILERCHECK=content
+# ccache only sees the command line from CMake, not the CFLAGS/CXXFLAGS that
+# pyodide's compiler wrapper appends behind it, so add them to the hash
+export CCACHE_NAMESPACE="$flags_stamp"
 
 if command -v ccache >/dev/null; then ccache --show-stats --zero-stats || true; fi
 rm -rf dist
@@ -88,6 +91,15 @@ for dir in build/*-Release; do
   fi
 done
 rm -f "$build_marker"
+
+# Show the CMake-side compile commands of one binding and one OpenCascade
+# source (pyodide's wrapper appends CFLAGS/CXXFLAGS to them)
+for dir in build/*-Release; do
+  [ -f "$dir/build.ninja" ] || continue
+  awk '/^build [^ ]*(OCP\.dir\/gp\.cpp|\/gp_Pnt\.cxx)\.o:/ { show = 1; print; next }
+       show && /^ *(FLAGS|LAUNCHER) =/ { print }
+       /^$/ { show = 0 }' "$dir/build.ninja" | cut -c1-2000
+done
 
 whl=(dist/*.whl)
 if [ ${#whl[@]} -ne 1 ]; then

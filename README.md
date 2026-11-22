@@ -188,7 +188,8 @@ Notes:
   reads `CFLAGS`/`CXXFLAGS` on the first configure, and the pyodide compiler
   wrapper adds them without ninja or ccache noticing. `scripts/build.sh`
   deletes `CMakeCache.txt` when they change, so the next build reconfigures
-  and recompiles everything.
+  and recompiles everything, and puts them into `CCACHE_NAMESPACE` so that
+  ccache doesn't return objects built with other flags.
 * **NixOS.** The emsdk and pyodide binaries need an FHS environment, e.g.
   `nix-shell -p steam-run binaryen --run "steam-run scripts/build.sh"` (and
   the same for `setup_toolchain.sh`). Set `TMPDIR` to a directory inside the
