@@ -2,10 +2,19 @@ diff --git a/cadquery-ocp-novtk/patch_OCP.cmake b/cadquery-ocp-novtk/patch_OCP.c
 index 4edc785..cb6c710 100644
 --- a/cadquery-ocp-novtk/patch_OCP.cmake
 +++ b/cadquery-ocp-novtk/patch_OCP.cmake
-@@ -35,6 +35,17 @@ foreach(f IN LISTS vtk_and_opengl_sources)
+@@ -35,6 +35,26 @@ foreach(f IN LISTS vtk_and_opengl_sources)
    file(REMOVE "${f}")
  endforeach()
  
++# ----- Python iteration without C++ exceptions -----
++execute_process(
++  COMMAND python3 "${CMAKE_CURRENT_LIST_DIR}/fix_iterators.py" "${REAL_SOURCE_DIR}"
++  RESULT_VARIABLE iter_result
++)
++if(NOT iter_result EQUAL 0)
++  message(FATAL_ERROR "fix_iterators.py failed")
++endif()
++
 +# ----- Keep only selected submodules (optional) -----
 +if(DEFINED ENV{OCP_KEEP_MODULES})
 +  execute_process(

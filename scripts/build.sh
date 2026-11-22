@@ -43,7 +43,7 @@ export OCP_BINDINGS_OPT_FLAG=-Os
 # notice a changed keep list (or patch) and silently reuses the old
 # registration code. Throw away the patched sources and OCP.cpp's object when
 # any of them changed.
-keep_hash=$({ cat "$keep_list" drop_modules.py patch_OCP.cmake; echo "$OCP_BINDINGS_OPT_FLAG"; } | sha256sum | cut -d' ' -f1)
+keep_hash=$({ cat "$keep_list" drop_modules.py fix_iterators.py patch_OCP.cmake; echo "$OCP_BINDINGS_OPT_FLAG"; } | sha256sum | cut -d' ' -f1)
 # CMake takes CFLAGS/CXXFLAGS into its cache only on the first configure, and
 # the compiler wrapper adds them out of sight of ninja and ccache. Reconfigure
 # from scratch when they changed, so that the compile commands change too.

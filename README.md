@@ -59,6 +59,24 @@ into upstream's `patch_OCP.cmake`, which already removes the VTK and OpenGL
 bindings. It runs only when the `OCP_KEEP_MODULES` environment variable points
 to a keep list.
 
+### Iteration without C++ exceptions
+
+OCP binds `__iter__` of the NCollection containers (`TopTools_ListOfShape`,
+`TopTools_IndexedMapOfShape`, ...) with pybind11's `py::make_iterator`, which
+signals the end of a loop by throwing a C++ `pybind11::stop_iteration`. Every
+Python `for` loop over such a collection therefore throws a C++ exception,
+which costs about 0.3 s in Firefox. A simple CadQuery render does more than a
+dozen of these (in `Shape.Edges()`, `Shape.Faces()`, `Workplane._findType` and
+once in `import cadquery`).
+
+[`patches/fix_iterators.py`](patches/fix_iterators.py) rewrites the 8 such
+bindings in OCP's `NCollection_tmpl.hxx` to copy the elements into a Python
+list and return the list's iterator, which ends without a C++ exception. The
+loop yields the same copies as before, but they are made up front, so changes
+to the collection during the loop are not seen. The script fails the build if
+it does not find exactly these 8 bindings. `patch_OCP.cmake.patch` runs it
+from upstream's `patch_OCP.cmake` too, whether or not a keep list is set.
+
 ### The keep list
 
 [`patches/gen_keep_modules.py`](patches/gen_keep_modules.py) computes the keep

@@ -2,8 +2,9 @@
 # Prepare an OCP.wasm checkout for a CadQuery-only build:
 #
 #  1. clone yeicor/OCP.wasm at OCP_WASM_COMMIT (unless the directory exists),
-#  2. add drop_modules.py and apply patches/*.patch (the OCP_KEEP_MODULES and
-#     OCP_BINDINGS_OPT_FLAG hooks, the wasm-opt level) to cadquery-ocp-novtk,
+#  2. add drop_modules.py and fix_iterators.py and apply patches/*.patch (the
+#     hooks that run them, the OCP_BINDINGS_OPT_FLAG hook and the wasm-opt
+#     level) to cadquery-ocp-novtk,
 #  3. download CadQuery and OCP's generated sources, and
 #  4. write cadquery-ocp-novtk/keep_modules.txt.
 #
@@ -48,6 +49,7 @@ fi
 
 # ----- Apply our files -----
 cp "$root/patches/drop_modules.py" "$pkg/drop_modules.py"
+cp "$root/patches/fix_iterators.py" "$pkg/fix_iterators.py"
 # Start from upstream's version of the patched files, so that changed patches
 # apply to an already prepared checkout too
 git -C "$upstream" checkout -- "${patched_files[@]}"
