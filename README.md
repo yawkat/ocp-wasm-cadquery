@@ -138,11 +138,6 @@ On top of dropping modules, the build changes how the module is compiled
   to export `PyInit_OCP`. C++ exceptions and RTTI keep working: OpenCascade
   and OCP are linked into the same module, and references to symbols of the
   main module (libc++, libc++abi) are not affected by `-fvisibility`.
-* **`wasm-opt -O2` instead of `-O4`**
-  ([`repair_wasm.py.patch`](patches/repair_wasm.py.patch)). From `-O3` on,
-  binaryen also inlines small functions that have several callers, and
-  `-O4` adds slow flatten-based passes. clang has already optimized the
-  code.
 
 ## Using it from web-openscad-editor
 
@@ -202,12 +197,12 @@ Notes:
   registration code. `scripts/build.sh` records a hash of the list and our
   patch files in the build directory and deletes `_deps/OCP-src`,
   `_deps/OCP.stamp` and `OCP.cpp.o` when it changes. CI always starts from a clean build directory.
-* **Changing compiler flags on an existing build directory.** CMake only
-  reads `CFLAGS`/`CXXFLAGS` on the first configure, and the pyodide compiler
-  wrapper adds them without ninja or ccache noticing. `scripts/build.sh`
-  deletes `CMakeCache.txt` when they change, so the next build reconfigures
-  and recompiles everything, and puts them into `CCACHE_NAMESPACE` so that
-  ccache doesn't return objects built with other flags.
+* **Changing compiler flags on an existing build directory.** `pyodide
+  build` doesn't pass `CFLAGS`/`CXXFLAGS` to CMake; its compiler wrapper
+  appends them to each compile command without ninja or ccache noticing.
+  `scripts/build.sh` deletes all object files when they change, and puts
+  them into `CCACHE_NAMESPACE` so that ccache doesn't return objects built
+  with other flags.
 * **NixOS.** The emsdk and pyodide binaries need an FHS environment, e.g.
   `nix-shell -p steam-run binaryen --run "steam-run scripts/build.sh"` (and
   the same for `setup_toolchain.sh`). Set `TMPDIR` to a directory inside the

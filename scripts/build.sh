@@ -44,10 +44,10 @@ export OCP_BINDINGS_OPT_FLAG=-Os
 # registration code. Throw away the patched sources and OCP.cpp's object when
 # any of them changed.
 keep_hash=$({ cat "$keep_list" drop_modules.py fix_iterators.py patch_OCP.cmake; echo "$OCP_BINDINGS_OPT_FLAG"; } | sha256sum | cut -d' ' -f1)
-# CMake takes CFLAGS/CXXFLAGS into its cache only on the first configure, and
-# the compiler wrapper adds them out of sight of ninja and ccache. Reconfigure
-# from scratch when they changed, so that the compile commands change too.
-flags_stamp="CFLAGS=$CFLAGS CXXFLAGS=$CXXFLAGS"
+# CFLAGS/CXXFLAGS never reach CMake: pyodide's compiler wrapper appends them,
+# out of sight of ninja and ccache. Delete all objects when they changed, so
+# that ninja recompiles everything.
+flags_stamp="CFLAGS=$CFLAGS CXXFLAGS=$CXXFLAGS OCP_BINDINGS_OPT_FLAG=$OCP_BINDINGS_OPT_FLAG"
 for dir in build/*-Release; do
   [ -d "$dir/_deps" ] || continue
   if [ "$(cat "$dir/.keep_modules.sha256" 2>/dev/null)" != "$keep_hash" ]; then
@@ -55,8 +55,8 @@ for dir in build/*-Release; do
     rm -rf "$dir/_deps/OCP-src" "$dir/_deps/OCP.stamp" "$dir/_deps/OCP-build/CMakeFiles/OCP.dir/OCP.cpp.o"
   fi
   if [ "$(cat "$dir/.compile_flags" 2>/dev/null)" != "$flags_stamp" ]; then
-    echo "Compiler flags changed, deleting the CMake cache in $dir"
-    rm -f "$dir/CMakeCache.txt"
+    echo "Compiler flags changed, deleting the object files in $dir"
+    find "$dir" -name '*.o' -delete
   fi
 done
 
@@ -71,8 +71,9 @@ export CI=1 _FORCE_OLD_SOURCES=TRUE OCP_KEEP_MODULES="$keep_list"
 # The compiler is downloaded again on every CI run, so don't compare mtimes
 export CCACHE_COMPILERCHECK=content
 # ccache only sees the command line from CMake, not the CFLAGS/CXXFLAGS that
-# pyodide's compiler wrapper appends behind it, so add them to the hash
-export CCACHE_NAMESPACE="$flags_stamp"
+# pyodide's compiler wrapper appends behind it, so add them to the hash.
+# (OCP_BINDINGS_OPT_FLAG is on the OCP target's command line.)
+export CCACHE_NAMESPACE="CFLAGS=$CFLAGS CXXFLAGS=$CXXFLAGS"
 
 if command -v ccache >/dev/null; then ccache --show-stats --zero-stats || true; fi
 rm -rf dist

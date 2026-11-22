@@ -2,9 +2,8 @@
 # Prepare an OCP.wasm checkout for a CadQuery-only build:
 #
 #  1. clone yeicor/OCP.wasm at OCP_WASM_COMMIT (unless the directory exists),
-#  2. add drop_modules.py and fix_iterators.py and apply patches/*.patch (the
-#     hooks that run them, the OCP_BINDINGS_OPT_FLAG hook and the wasm-opt
-#     level) to cadquery-ocp-novtk,
+#  2. add drop_modules.py, fix_iterators.py and the hooks that run them (and
+#     the OCP_BINDINGS_OPT_FLAG hook) to cadquery-ocp-novtk,
 #  3. download CadQuery and OCP's generated sources, and
 #  4. write cadquery-ocp-novtk/keep_modules.txt.
 #
@@ -20,9 +19,6 @@ upstream=$(realpath -m "${1:-$root/upstream}")
 work="$root/work"
 pkg="$upstream/cadquery-ocp-novtk"
 
-# Upstream files that our patches change
-mapfile -t patched_files < <(sed -n 's|^+++ b/||p' "$root"/patches/*.patch | sort -u)
-
 # ----- Upstream checkout -----
 if [ ! -d "$upstream/.git" ]; then
   git clone --filter=blob:none https://github.com/yeicor/OCP.wasm "$upstream"
@@ -30,7 +26,7 @@ fi
 if [ "$(git -C "$upstream" rev-parse HEAD)" != "$OCP_WASM_COMMIT" ]; then
   # Move an existing checkout to the pinned commit. Only drop our own changes;
   # untracked files (emsdk, xbuildenv, build dirs) stay.
-  git -C "$upstream" checkout -- "${patched_files[@]}"
+  git -C "$upstream" checkout -- cadquery-ocp-novtk/patch_OCP.cmake
   git -C "$upstream" cat-file -e "$OCP_WASM_COMMIT^{commit}" 2>/dev/null ||
     git -C "$upstream" fetch origin "$OCP_WASM_COMMIT"
   git -C "$upstream" checkout --detach "$OCP_WASM_COMMIT"
@@ -50,16 +46,15 @@ fi
 # ----- Apply our files -----
 cp "$root/patches/drop_modules.py" "$pkg/drop_modules.py"
 cp "$root/patches/fix_iterators.py" "$pkg/fix_iterators.py"
-# Start from upstream's version of the patched files, so that changed patches
-# apply to an already prepared checkout too
-git -C "$upstream" checkout -- "${patched_files[@]}"
-for patch_file in "$root"/patches/*.patch; do
-  if ! git -C "$upstream" apply "$patch_file"; then
-    echo "error: $patch_file does not apply to $upstream" >&2
-    exit 1
-  fi
-  echo "Applied $(basename "$patch_file")"
-done
+patch_file="$root/patches/patch_OCP.cmake.patch"
+# Start from upstream's file, so that a checkout patched with an older version
+# of the patch gets the current one
+git -C "$upstream" checkout -- cadquery-ocp-novtk/patch_OCP.cmake
+if ! git -C "$upstream" apply "$patch_file"; then
+  echo "error: $patch_file does not apply to $upstream" >&2
+  exit 1
+fi
+echo "Applied $(basename "$patch_file")"
 
 # ----- Inputs for the keep list -----
 mkdir -p "$work"
