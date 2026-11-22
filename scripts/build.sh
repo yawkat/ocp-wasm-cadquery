@@ -38,9 +38,9 @@ export LDFLAGS=-O1
 
 # Upstream resets the mtimes of the patched OCP sources, so ninja does not
 # notice a changed keep list (or patch) and silently reuses the old
-# registration code. Throw away the patched sources and OCP.cpp's object when
+# registration code. Throw away the patched sources and their objects when
 # any of them changed.
-keep_hash=$(cat "$keep_list" drop_modules.py fix_iterators.py patch_OCP.cmake | sha256sum | cut -d' ' -f1)
+keep_hash=$(cat "$keep_list" drop_modules.py fix_iterators.py lazy_classes.py ocp_lazy.hxx patch_OCP.cmake | sha256sum | cut -d' ' -f1)
 # CFLAGS/CXXFLAGS never reach CMake: pyodide's compiler wrapper appends them,
 # out of sight of ninja and ccache. Delete all objects when they changed, so
 # that ninja recompiles everything.
@@ -49,7 +49,10 @@ for dir in build/*-Release; do
   [ -d "$dir/_deps" ] || continue
   if [ "$(cat "$dir/.keep_modules.sha256" 2>/dev/null)" != "$keep_hash" ]; then
     echo "Keep list changed, resetting OCP sources in $dir"
-    rm -rf "$dir/_deps/OCP-src" "$dir/_deps/OCP.stamp" "$dir/_deps/OCP-build/CMakeFiles/OCP.dir/OCP.cpp.o"
+    # (lazy_classes.py rewrites every module's source, not just OCP.cpp;
+    # ccache still has the objects of unchanged sources)
+    rm -rf "$dir/_deps/OCP-src" "$dir/_deps/OCP.stamp"
+    find "$dir/_deps/OCP-build/CMakeFiles/OCP.dir" -name '*.o' -delete 2>/dev/null || true
   fi
   if [ "$(cat "$dir/.compile_flags" 2>/dev/null)" != "$flags_stamp" ]; then
     echo "Compiler flags changed, deleting the object files in $dir"

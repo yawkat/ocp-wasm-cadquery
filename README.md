@@ -40,6 +40,11 @@ module makes each OpenCascade exception cheaper.
 A smoke test of about 30 CadQuery features, including the exporters, gives
 the same results as with the upstream wheel.
 
+Binding classes on first use (see below) cut Chrome's `import OCP` further,
+from 5.2–5.7 s to 1.1–1.2 s, and the whole load from 9.7–10.2 s to
+5.7–5.8 s; the first render takes 0.0–0.4 s longer (measured in one Chrome
+session against release 7.9.3.1-cadquery2.8.0-2).
+
 ## How it works
 
 OCP registers each of its submodules in two phases:
@@ -127,6 +132,44 @@ hidden visibility the module exports about 850 symbols instead of 45,000
 of 46,000. C++ exceptions and RTTI keep working: OpenCascade and OCP are
 linked into the same module, and references to symbols of the main module
 (libc++, libc++abi) are not affected by `-fvisibility`.
+
+### Binding methods on first use
+
+V8 compiles WebAssembly functions lazily, on their first call, on one thread.
+Each `register_X` function runs exactly once, so almost all of Chrome's
+`import OCP` used to be spent compiling the code that binds the methods of
+every class (Firefox compiles everything in the background beforehand and
+doesn't have this problem).
+
+[`patches/lazy_classes.py`](patches/lazy_classes.py) rewrites `register_X` in
+every `X.cpp`: the bindings of each class (its `// Class` block) and of each
+NCollection typedef (`register_template_*`) move into a lambda that is passed
+to `ocp_lazy::add` (from [`patches/ocp_lazy.hxx`](patches/ocp_lazy.hxx)).
+Each lambda is its own wasm function, so neither it nor what it inlines is
+compiled until it runs. Phase 1 (all classes and enums), nested enums, class
+constants, module-level functions, exception translators and implicit
+conversions stay at import time, in their original order.
+
+A class's deferred bindings run, together with those of its base classes
+(base classes first), when Python first
+
+* creates an instance of the class or of a subclass, from Python or from a C++
+  return value (a hook on the class's `tp_alloc`),
+* looks up an attribute of the class or a subclass (a hook on the pybind11
+  metaclass's `tp_getattro`: static methods, `__init__`, `__dict__`, ...), or
+* calls the class or a subclass (a hook on the metaclass's `tp_call`, for
+  Python subclasses, whose `tp_alloc` Python sets itself).
+
+Instance attributes and special methods need no hook, because an instance only
+exists once its class is bound. Argument conversion and return values only
+need the types, which phase 1 declares as before.
+
+`OCP._lazy_stats()` returns (bindings deferred, bindings run, classes still
+pending), and `OCP._lazy_bind_all()` binds everything, for tests.
+
+`patch_OCP.cmake.patch` runs the script after `drop_modules.py`. It fails the
+build if any `X.cpp` doesn't have the expected shape, and does nothing on
+already patched sources.
 
 ## Using it from web-openscad-editor
 

@@ -2,8 +2,8 @@
 # Prepare an OCP.wasm checkout for a CadQuery-only build:
 #
 #  1. clone yeicor/OCP.wasm at OCP_WASM_COMMIT (unless the directory exists),
-#  2. add drop_modules.py, fix_iterators.py and the hooks that run them to
-#     cadquery-ocp-novtk,
+#  2. add drop_modules.py, fix_iterators.py, lazy_classes.py and the hooks
+#     that run them to cadquery-ocp-novtk,
 #  3. download CadQuery and OCP's generated sources, and
 #  4. write cadquery-ocp-novtk/keep_modules.txt.
 #
@@ -46,6 +46,8 @@ fi
 # ----- Apply our files -----
 cp "$root/patches/drop_modules.py" "$pkg/drop_modules.py"
 cp "$root/patches/fix_iterators.py" "$pkg/fix_iterators.py"
+cp "$root/patches/lazy_classes.py" "$pkg/lazy_classes.py"
+cp "$root/patches/ocp_lazy.hxx" "$pkg/ocp_lazy.hxx"
 patch_file="$root/patches/patch_OCP.cmake.patch"
 # Start from upstream's file, so that a checkout patched with an older version
 # of the patch gets the current one
