@@ -115,6 +115,19 @@ Limits:
 If something is missing, add its module to the start set (or extend the
 script) and rebuild.
 
+### Symbol visibility
+
+Everything is compiled with `-fvisibility=hidden` (see
+[`scripts/build.sh`](scripts/build.sh)). OpenCascade's `Standard_EXPORT` is
+empty outside Windows, so otherwise every OpenCascade symbol is exported from
+the side module and every address-taken one is imported again through the
+GOT, which Emscripten's JS dynamic linker resolves when the module loads. With
+hidden visibility the module exports about 850 symbols instead of 45,000
+(`PyInit_OCP` and pybind11's exception types) and imports about 1,400 instead
+of 46,000. C++ exceptions and RTTI keep working: OpenCascade and OCP are
+linked into the same module, and references to symbols of the main module
+(libc++, libc++abi) are not affected by `-fvisibility`.
+
 ## Using it from web-openscad-editor
 
 Point web-openscad-editor's CadQuery support at a release wheel:
@@ -173,6 +186,12 @@ Notes:
   registration code. `scripts/build.sh` records a hash of the list and our
   patch files in the build directory and deletes `_deps/OCP-src`,
   `_deps/OCP.stamp` and `OCP.cpp.o` when it changes. CI always starts from a clean build directory.
+* **Changing compiler flags on an existing build directory.** `pyodide
+  build` doesn't pass `CFLAGS`/`CXXFLAGS` to CMake; its compiler wrapper
+  appends them to each compile command without ninja or ccache noticing.
+  `scripts/build.sh` deletes all object files when they change, and puts
+  them into `CCACHE_NAMESPACE` so that ccache doesn't return objects built
+  with other flags.
 * **NixOS.** The emsdk and pyodide binaries need an FHS environment, e.g.
   `nix-shell -p steam-run binaryen --run "steam-run scripts/build.sh"` (and
   the same for `setup_toolchain.sh`). Set `TMPDIR` to a directory inside the
