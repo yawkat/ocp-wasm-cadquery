@@ -97,6 +97,35 @@ Limits:
 If something is missing, add its module to the start set (or extend the
 script) and rebuild.
 
+### Build flags
+
+On top of dropping modules, the build changes how the module is compiled
+(see the comments in [`scripts/build.sh`](scripts/build.sh)):
+
+* **The bindings are compiled with `-Os`, OpenCascade with `-O3`.** At `-O3`
+  clang inlines pybind11's templates into a few huge `register_X`
+  functions, which run once at import but which the browser still has to
+  compile. Binding dispatch speed hardly matters next to the Python
+  interpreter, while OpenCascade's geometry code stays fully optimized.
+  pyodide's compiler wrapper appends `CFLAGS`/`CXXFLAGS` after all flags
+  from CMake, so [`patch_OCP.cmake.patch`](patches/patch_OCP.cmake.patch)
+  passes the bindings' level through `EMCC_CFLAGS`, which emcc appends last,
+  and compiles a check into the module that fails the build if the flag
+  doesn't arrive.
+* **Hidden symbol visibility for everything.** OpenCascade's
+  `Standard_EXPORT` is empty outside Windows, so by default every
+  OpenCascade symbol is exported from the side module and every
+  address-taken one is imported again through the GOT, which Emscripten's
+  JS dynamic linker resolves when the module loads. The module only needs
+  to export `PyInit_OCP`. C++ exceptions and RTTI keep working: OpenCascade
+  and OCP are linked into the same module, and references to symbols of the
+  main module (libc++, libc++abi) are not affected by `-fvisibility`.
+* **`wasm-opt -O2` instead of `-O4`**
+  ([`repair_wasm.py.patch`](patches/repair_wasm.py.patch)). From `-O3` on,
+  binaryen also inlines small functions that have several callers, and
+  `-O4` adds slow flatten-based passes. clang has already optimized the
+  code.
+
 ## Using it from web-openscad-editor
 
 Point web-openscad-editor's CadQuery support at a release wheel:
@@ -155,6 +184,11 @@ Notes:
   registration code. `scripts/build.sh` records a hash of the list and our
   patch files in the build directory and deletes `_deps/OCP-src`,
   `_deps/OCP.stamp` and `OCP.cpp.o` when it changes. CI always starts from a clean build directory.
+* **Changing compiler flags on an existing build directory.** CMake only
+  reads `CFLAGS`/`CXXFLAGS` on the first configure, and the pyodide compiler
+  wrapper adds them without ninja or ccache noticing. `scripts/build.sh`
+  deletes `CMakeCache.txt` when they change, so the next build reconfigures
+  and recompiles everything.
 * **NixOS.** The emsdk and pyodide binaries need an FHS environment, e.g.
   `nix-shell -p steam-run binaryen --run "steam-run scripts/build.sh"` (and
   the same for `setup_toolchain.sh`). Set `TMPDIR` to a directory inside the

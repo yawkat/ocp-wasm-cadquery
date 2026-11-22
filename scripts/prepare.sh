@@ -2,7 +2,8 @@
 # Prepare an OCP.wasm checkout for a CadQuery-only build:
 #
 #  1. clone yeicor/OCP.wasm at OCP_WASM_COMMIT (unless the directory exists),
-#  2. add drop_modules.py and the OCP_KEEP_MODULES hook to cadquery-ocp-novtk,
+#  2. add drop_modules.py and apply patches/*.patch (the OCP_KEEP_MODULES and
+#     OCP_BINDINGS_OPT_FLAG hooks, the wasm-opt level) to cadquery-ocp-novtk,
 #  3. download CadQuery and OCP's generated sources, and
 #  4. write cadquery-ocp-novtk/keep_modules.txt.
 #
@@ -18,6 +19,9 @@ upstream=$(realpath -m "${1:-$root/upstream}")
 work="$root/work"
 pkg="$upstream/cadquery-ocp-novtk"
 
+# Upstream files that our patches change
+mapfile -t patched_files < <(sed -n 's|^+++ b/||p' "$root"/patches/*.patch | sort -u)
+
 # ----- Upstream checkout -----
 if [ ! -d "$upstream/.git" ]; then
   git clone --filter=blob:none https://github.com/yeicor/OCP.wasm "$upstream"
@@ -25,7 +29,7 @@ fi
 if [ "$(git -C "$upstream" rev-parse HEAD)" != "$OCP_WASM_COMMIT" ]; then
   # Move an existing checkout to the pinned commit. Only drop our own changes;
   # untracked files (emsdk, xbuildenv, build dirs) stay.
-  git -C "$upstream" checkout -- cadquery-ocp-novtk/patch_OCP.cmake
+  git -C "$upstream" checkout -- "${patched_files[@]}"
   git -C "$upstream" cat-file -e "$OCP_WASM_COMMIT^{commit}" 2>/dev/null ||
     git -C "$upstream" fetch origin "$OCP_WASM_COMMIT"
   git -C "$upstream" checkout --detach "$OCP_WASM_COMMIT"
@@ -44,16 +48,16 @@ fi
 
 # ----- Apply our files -----
 cp "$root/patches/drop_modules.py" "$pkg/drop_modules.py"
-patch_file="$root/patches/patch_OCP.cmake.patch"
-if git -C "$upstream" apply --check "$patch_file" 2>/dev/null; then
-  git -C "$upstream" apply "$patch_file"
+# Start from upstream's version of the patched files, so that changed patches
+# apply to an already prepared checkout too
+git -C "$upstream" checkout -- "${patched_files[@]}"
+for patch_file in "$root"/patches/*.patch; do
+  if ! git -C "$upstream" apply "$patch_file"; then
+    echo "error: $patch_file does not apply to $upstream" >&2
+    exit 1
+  fi
   echo "Applied $(basename "$patch_file")"
-elif git -C "$upstream" apply --check --reverse "$patch_file" 2>/dev/null; then
-  echo "$(basename "$patch_file") is already applied"
-else
-  echo "error: $patch_file does not apply to $upstream" >&2
-  exit 1
-fi
+done
 
 # ----- Inputs for the keep list -----
 mkdir -p "$work"

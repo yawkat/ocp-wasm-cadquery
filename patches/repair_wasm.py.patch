@@ -1,0 +1,20 @@
+diff --git a/cadquery-ocp-novtk/repair_wasm.py b/cadquery-ocp-novtk/repair_wasm.py
+index f4b1073..b3077d8 100644
+--- a/cadquery-ocp-novtk/repair_wasm.py
++++ b/cadquery-ocp-novtk/repair_wasm.py
+@@ -74,10 +74,14 @@ def repair_and_optimize_wasm(input_path, output_path):
+         wasm_bytes = patch_wasm(wasm_bytes, offset)
+ 
+     is_debug = os.environ.get("DEBUG", "").lower() in {"1", "on", "true", "yes"}
++    # -O2 rather than -O4: -O3 and up also inline functions with several
++    # callers ("flexible" inlining), which duplicates code in a module that is
++    # mostly pybind11 bindings, and -O4 adds slow flatten-based passes. The
++    # OpenCascade code was already optimized by clang.
+     wasm_opt_args = (
+         ["-O0", "--debuginfo"]
+         if is_debug
+-        else ["-O4"]
++        else ["-O2"]
+         if os.environ.get("CI", "").lower() in {"1", "on", "true", "yes"}
+         else ["-O1"]
+     )

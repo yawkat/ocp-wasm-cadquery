@@ -20,16 +20,43 @@ if [ ! -s "$keep_list" ]; then
   exit 1
 fi
 
+# Compiler flags. pyodide's compiler wrapper appends CFLAGS and CXXFLAGS to
+# every compile command, after the flags from CMake, so they win over any
+# per-target flags.
+#  * -O3 for OpenCascade: geometry kernel speed matters.
+#  * Hidden visibility: OpenCascade's Standard_EXPORT is empty outside
+#    Windows, so without it every OpenCascade symbol is exported from the
+#    module and every address-taken one goes through a GOT import that the
+#    JS dynamic linker resolves at load time. Only PyInit_OCP (explicitly
+#    marked visible by pybind11) has to be exported. References to undefined
+#    symbols, such as libc++ in the main module, are not affected.
+#  * OCP_BINDINGS_OPT_FLAG: optimization level of the binding sources only
+#    (see patch_OCP.cmake.patch). Binding dispatch speed doesn't matter, and
+#    -O3 inlines pybind11's templates into huge register_* functions that the
+#    browser compiles on import. -Os is what pybind11 uses for its modules.
+export CFLAGS="-O3 -fvisibility=hidden"
+export CXXFLAGS="-O3 -fvisibility=hidden -fvisibility-inlines-hidden"
+export LDFLAGS=-O1
+export OCP_BINDINGS_OPT_FLAG=-Os
+
 # Upstream resets the mtimes of the patched OCP sources, so ninja does not
 # notice a changed keep list (or patch) and silently reuses the old
 # registration code. Throw away the patched sources and OCP.cpp's object when
 # any of them changed.
-keep_hash=$(cat "$keep_list" drop_modules.py patch_OCP.cmake | sha256sum | cut -d' ' -f1)
+keep_hash=$({ cat "$keep_list" drop_modules.py patch_OCP.cmake; echo "$OCP_BINDINGS_OPT_FLAG"; } | sha256sum | cut -d' ' -f1)
+# CMake takes CFLAGS/CXXFLAGS into its cache only on the first configure, and
+# the compiler wrapper adds them out of sight of ninja and ccache. Reconfigure
+# from scratch when they changed, so that the compile commands change too.
+flags_stamp="CFLAGS=$CFLAGS CXXFLAGS=$CXXFLAGS"
 for dir in build/*-Release; do
   [ -d "$dir/_deps" ] || continue
   if [ "$(cat "$dir/.keep_modules.sha256" 2>/dev/null)" != "$keep_hash" ]; then
     echo "Keep list changed, resetting OCP sources in $dir"
     rm -rf "$dir/_deps/OCP-src" "$dir/_deps/OCP.stamp" "$dir/_deps/OCP-build/CMakeFiles/OCP.dir/OCP.cpp.o"
+  fi
+  if [ "$(cat "$dir/.compile_flags" 2>/dev/null)" != "$flags_stamp" ]; then
+    echo "Compiler flags changed, deleting the CMake cache in $dir"
+    rm -f "$dir/CMakeCache.txt"
   fi
 done
 
@@ -39,7 +66,7 @@ source emsdk/emsdk_env.sh
 mkdir -p emsdk/upstream/emscripten/cache
 find emsdk/upstream/emscripten/cache -type f -exec touch {} +
 
-export SKBUILD_CMAKE_BUILD_TYPE=Release CFLAGS=-O3 CXXFLAGS=-O3 LDFLAGS=-O1
+export SKBUILD_CMAKE_BUILD_TYPE=Release
 export CI=1 _FORCE_OLD_SOURCES=TRUE OCP_KEEP_MODULES="$keep_list"
 # The compiler is downloaded again on every CI run, so don't compare mtimes
 export CCACHE_COMPILERCHECK=content
@@ -57,6 +84,7 @@ if command -v ccache >/dev/null; then ccache --show-stats || true; fi
 for dir in build/*-Release; do
   if [ "$dir/install_manifest.txt" -nt "$build_marker" ]; then
     echo "$keep_hash" > "$dir/.keep_modules.sha256"
+    echo "$flags_stamp" > "$dir/.compile_flags"
   fi
 done
 rm -f "$build_marker"
