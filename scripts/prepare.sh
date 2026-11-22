@@ -2,7 +2,8 @@
 # Prepare an OCP.wasm checkout for a CadQuery-only build:
 #
 #  1. clone yeicor/OCP.wasm at OCP_WASM_COMMIT (unless the directory exists),
-#  2. add drop_modules.py and the OCP_KEEP_MODULES hook to cadquery-ocp-novtk,
+#  2. add drop_modules.py, fix_iterators.py and the hooks that run them to
+#     cadquery-ocp-novtk,
 #  3. download CadQuery and OCP's generated sources, and
 #  4. write cadquery-ocp-novtk/keep_modules.txt.
 #
@@ -44,16 +45,16 @@ fi
 
 # ----- Apply our files -----
 cp "$root/patches/drop_modules.py" "$pkg/drop_modules.py"
+cp "$root/patches/fix_iterators.py" "$pkg/fix_iterators.py"
 patch_file="$root/patches/patch_OCP.cmake.patch"
-if git -C "$upstream" apply --check "$patch_file" 2>/dev/null; then
-  git -C "$upstream" apply "$patch_file"
-  echo "Applied $(basename "$patch_file")"
-elif git -C "$upstream" apply --check --reverse "$patch_file" 2>/dev/null; then
-  echo "$(basename "$patch_file") is already applied"
-else
+# Start from upstream's file, so that a checkout patched with an older version
+# of the patch gets the current one
+git -C "$upstream" checkout -- cadquery-ocp-novtk/patch_OCP.cmake
+if ! git -C "$upstream" apply "$patch_file"; then
   echo "error: $patch_file does not apply to $upstream" >&2
   exit 1
 fi
+echo "Applied $(basename "$patch_file")"
 
 # ----- Inputs for the keep list -----
 mkdir -p "$work"

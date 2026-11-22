@@ -7,8 +7,8 @@ The scripts, patches and workflow in this repository are under the MIT license
 
 `patches/patch_OCP.cmake.patch` contains context lines from
 `cadquery-ocp-novtk/patch_OCP.cmake` in [yeicor/OCP.wasm], and
-`patches/drop_modules.py` is written to run from that build. OCP.wasm is
-Copyright 2025 Yeicor, under the MIT license.
+`patches/drop_modules.py` and `patches/fix_iterators.py` are written to run
+from that build. OCP.wasm is Copyright 2025 Yeicor, under the MIT license.
 
 ## The built wheel
 

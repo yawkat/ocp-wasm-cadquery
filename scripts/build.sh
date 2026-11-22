@@ -24,7 +24,7 @@ fi
 # notice a changed keep list (or patch) and silently reuses the old
 # registration code. Throw away the patched sources and OCP.cpp's object when
 # any of them changed.
-keep_hash=$(cat "$keep_list" drop_modules.py patch_OCP.cmake | sha256sum | cut -d' ' -f1)
+keep_hash=$(cat "$keep_list" drop_modules.py fix_iterators.py patch_OCP.cmake | sha256sum | cut -d' ' -f1)
 for dir in build/*-Release; do
   [ -d "$dir/_deps" ] || continue
   if [ "$(cat "$dir/.keep_modules.sha256" 2>/dev/null)" != "$keep_hash" ]; then
